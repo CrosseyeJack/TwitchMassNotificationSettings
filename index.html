@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>Twitch Mass Noification Manager Thingy Bob</title>
+  <meta name="description" content="A Simple tool to mass manage your Twitch Nofications">
+  <meta name="author" content="CrosseyeJack">
+  <script src="//code.jquery.com/jquery-1.12.0.min.js"></script>
+  <!--- why JQuery, cause I'm fucking lazy and its not really my job to code this shit for you :-p --->
+  <script src="twitch.min.js"></script>
+  <!--  <link rel="stylesheet" href="css/styles.css?v=1.0">-->
+  <!--[if lt IE 9]>
+  <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+</head>
+
+<body>
+  <img src="//ttv-api.s3.amazonaws.com/assets/connect_dark.png" class="twitch-connect" href="#" />
+  <a href="#" class="twitch-logout" hidden>LogOut</a>
+  <table id='channelTable' border='0'>
+    <tbody id="body">
+      <tr>
+        <th>Channel Name</th>
+        <th>Notifications</th>
+      </tr>
+    </tbody>
+  </table>
+  <script>
+    var followedChannels = new Array();
+    var username;
+    var fetchFollows = function (offsetVar) {
+      var limit = 100;
+      Twitch.api({
+        method: '/users/' + username + '/follows/channels',
+        verb: 'GET',
+        params: {
+          limit: limit,
+          offset: offsetVar
+        }
+      }, function (error, channels) {
+        if (typeof error == 'undefined') {
+          console.log(error);
+        } else {
+          channels.follows.forEach(function (channel) {
+            // TODO prevent double calling of API and data in to followed channels.
+            followedChannels.push(channel);
+          });
+          if (offsetVar < channels._total && limit < channels._total) {
+            fetchFollows(offsetVar + limit);
+          } else {
+            populateTable();
+          }
+        }
+      });
+    };
+    var populateTable = function () {
+      followedChannels.forEach(function (channel) {
+        if (channel.notifications) {
+          $("#channelTable").append("<tr><td>" + channel.channel.display_name + "</td><td><input type='checkbox' class='cbclass' id='" + channel.channel.name + "' checked></td></tr>");
+        } else {
+          $("#channelTable").append("<tr><td>" + channel.channel.display_name + "</td><td><input type='checkbox' class='cbclass' id='" + channel.channel.name + "'></td></tr>");
+        }
+      });
+    };
+    Twitch.init({
+      clientId: 'gdekjc1uld4n682pi309lrzh7567qkn'
+    }, function (error, status) {
+      if (status.authenticated) {
+        $('.twitch-connect').hide();
+        $('.twitch-logout').show();
+        Twitch.api({
+          method: '/',
+          verb: 'GET'
+        }, function (error, user) {
+          if (typeof error == 'undefined') {
+            console.log(error);
+          } else {
+            username = user.token.user_name;
+            fetchFollows(0);
+          }
+        });
+
+      }
+      $('#channelTable').on('click', '.cbclass', function (e) {
+        console.log($(this).attr('id')); // channel name
+        console.log(this.checked); // true/false
+        $(this).attr('disabled', 'disabled');
+        var toggle = $(this);
+        // Should really put in a "processing" animation or spinner or something. But fuck it
+        Twitch.api({
+          method: "/users/" + username + "/follows/channels/" + $(this).attr('id'),
+          verb: 'PUT',
+          params: {
+            notifications: this.checked
+          }
+        }, function (error, status) {
+          $(toggle).removeAttr('disabled');
+          if (typeof error == 'undefined') {
+            console.log(error);
+          } else {
+            console.log(status);
+          }
+        });
+      });
+      $('.twitch-connect').click(function () {
+        Twitch.login({
+          scope: ['user_follows_edit'],
+          force_verify: true
+        });
+      });
+      $('.twitch-logout').click(function () {
+        Twitch.logout(function (error) {
+          $('.twitch-logout').remove();
+          $('.twitch-connect').show();
+          $('#channelTable').remove();
+          console.log("logout called");
+          if (typeof error == 'undefined') {
+            console.log("Error");
+            console.log(error);
+          }
+        });
+      });
+    });
+  </script>
+</body>
+
+</html>
